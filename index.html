@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>LiteCAD Pro v4 | Desktop Engine</title>
+    <style>
+        :root {
+            --accent: #007bff;
+            --panel-bg: #1e1e26;
+            --ui-bg: #0f0f12;
+            --border: #333642;
+            --text: #ffffff;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background: var(--ui-bg); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; }
+
+        /* Setup Splash */
+        #splash {
+            position: fixed; inset: 0; background: #000; z-index: 9999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .setup-box { background: var(--panel-bg); padding: 40px; border-radius: 12px; border: 1px solid var(--border); width: 450px; }
+        
+        /* Layout */
+        #main-app { display: none; flex: 1; flex-direction: column; }
+        header { background: var(--panel-bg); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+        
+        .workspace { display: flex; flex: 1; overflow: hidden; }
+        .toolbar { width: 65px; background: var(--panel-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 15px 0; gap: 10px; align-items: center; }
+        
+        .t-btn { 
+            width: 45px; height: 45px; border-radius: 8px; border: 1px solid transparent; 
+            background: #2d2d3a; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px;
+        }
+        .t-btn:hover { background: #3d3d4a; border-color: var(--accent); }
+        .t-btn.active { background: var(--accent); box-shadow: 0 0 15px rgba(0,123,255,0.5); }
+
+        .canvas-area { flex: 1; background: #111; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 50px; position: relative; }
+        canvas { background: #fff; box-shadow: 0 0 50px rgba(0,0,0,0.5); image-rendering: -webkit-optimize-contrast; }
+
+        .inspector { width: 320px; background: var(--panel-bg); border-left: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+        .card { background: #252530; padding: 15px; border-radius: 8px; border: 1px solid var(--border); }
+        
+        input, button { width: 100%; padding: 10px; border-radius: 5px; border: 1px solid var(--border); background: #000; color: #fff; outline: none; }
+        button { background: var(--accent); cursor: pointer; font-weight: bold; margin-top: 10px; border: none; }
+        button:hover { filter: brightness(1.2); }
+        
+        .prop-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<div id="splash">
+    <div class="setup-box">
+        <h2 style="margin-top:0">LiteCAD Pro <span style="color:var(--accent)">Setup</span></h2>
+        <p style="color:#888; font-size:14px">Configureer je nieuwe projectomgeving</p>
+        <label>Projectnaam</label>
+        <input type="text" id="p-name" value="Nieuw_Huis_Ontwerp">
+        <div style="display:flex; gap:10px; margin-top:15px">
+            <div><label>Breedte</label><input type="number" id="p-w" value="1600"></div>
+            <div><label>Hoogte</label><input type="number" id="p-h" value="1000"></div>
+        </div>
+        <button onclick="app.launch()">START ENGINE</button>
+    </div>
+</div>
+
+<div id="main-app">
+    <header>
+        <div style="font-weight:900; letter-spacing:1px">LITECAD <span id="title-tag" style="color:var(--accent)"></span></div>
+        <div style="display:flex; gap:10px">
+            <button onclick="app.saveJSON()" style="width:auto; margin:0">OPSLAAN (JSON)</button>
+            <button onclick="app.exportPNG()" style="width:auto; margin:0; background:#28a745">EXPORT 4K</button>
+        </div>
+    </header>
+
+    <div class="workspace">
+        <div class="toolbar">
+            <button class="t-btn active" data-tool="select">🎯</button>
+            <button class="t-btn" data-tool="line">📏</button>
+            <button class="t-btn" data-tool="rect">📦</button>
+            <button class="t-btn" data-tool="text">T</button>
+            <hr style="width:30px; border-color:#444">
+            <button class="t-btn" onclick="app.undo()">↩️</button>
+            <button class="t-btn" onclick="app.clear()">🗑️</button>
+        </div>
+
+        <div class="canvas-area">
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="inspector">
+            <div class="card">
+                <h3 style="font-size:12px; margin-top:0; color:var(--accent)">OBJECT INSPECTOR</h3>
+                <div id="ui-none" style="color:#666; font-size:12px">Geen selectie</div>
+                <div id="ui-props" style="display:none">
+                    <div class="prop-row">Kleur <input type="color" id="i-color" oninput="app.updateObj()" style="width:40px; padding:0"></div>
+                    <div class="prop-row">Breedte <input type="range" id="i-w" min="5" max="1000" oninput="app.updateObj()"></div>
+                    <div class="prop-row">Hoogte <input type="range" id="i-h" min="5" max="1000" oninput="app.updateObj()"></div>
+                    <div class="prop-row">Tekst <input type="text" id="i-text" oninput="app.updateObj()" style="width:120px"></div>
+                    <button onclick="app.deleteSelected()" style="background:#dc3545">WIS OBJECT</button>
+                </div>
+            </div>
+            <div class="card">
+                <h3 style="font-size:12px; margin-top:0; color:var(--accent)">SNELMENU</h3>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px">
+                    <button onclick="app.quickAdd('BED', 100, 160)" style="background:#444; font-size:10px">BED</button>
+                    <button onclick="app.quickAdd('BANK', 200, 80)" style="background:#444; font-size:10px">BANK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * LITE CAD PRO ENGINE - HIGH RESOLUTION
+ */
+class Shape {
+    constructor(type, x, y, text = "") {
+        this.type = type; this.x = x; this.y = y; this.w = 0; this.h = 0;
+        this.color = "#000000"; this.text = text;
+        this.selected = false; this.id = Date.now();
+    }
+    draw(ctx, isExport = false) {
+        ctx.save();
+        ctx.strokeStyle = isExport ? "#FFFFFF" : (this.selected ? "#007bff" : this.color);
+        ctx.lineWidth = this.selected ? 4 : 2;
+        ctx.fillStyle = isExport ? "rgba(255,255,255,0.1)" : (this.selected ? "rgba(0,123,255,0.1)" : "rgba(0,0,0,0.02)");
+        
+        if(this.type === 'rect') {
+            ctx.strokeRect(this.x, this.y, this.w, this.h);
+            ctx.fillRect(this.x, this.y, this.w, this.h);
+            if(this.text) {
+                ctx.fillStyle = isExport ? "#FFF" : this.color;
+                ctx.font = "bold 14px Segoe UI";
+                ctx.fillText(this.text, this.x + 5, this.y + 20);
+            }
+        } else if(this.type === 'line') {
+            ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x+this.w, this.y+this.h); ctx.stroke();
+        } else if(this.type === 'text') {
+            ctx.fillStyle = isExport ? "#FFF" : (this.selected ? "#007bff" : this.color);
+            ctx.font = "bold 20px Segoe UI";
+            ctx.fillText(this.text, this.x, this.y);
+        }
+        ctx.restore();
+    }
+    isHit(mx, my) {
+        const p = 10;
+        return mx > Math.min(this.x, this.x+this.w)-p && mx < Math.max(this.x, this.x+this.w)+p &&
+               my > Math.min(this.y, this.y+this.h)-p && my < Math.max(this.y, this.y+this.h)+p;
+    }
+}
+
+const app = {
+    shapes: [], history: [], tool: 'select', isDown: false,
+    launch() {
+        this.config = { w: parseInt(document.getElementById('p-w').value), h: parseInt(document.getElementById('p-h').value), name: document.getElementById('p-name').value };
+        document.getElementById('splash').style.display = 'none';
+        document.getElementById('main-app').style.display = 'flex';
+        document.getElementById('title-tag').innerText = this.config.name.toUpperCase();
+        this.initCanvas();
+    },
+    initCanvas() {
+        this.canvas = document.getElementById('canvas');
+        this.ctx = this.canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = this.config.w * dpr;
+        this.canvas.height = this.config.h * dpr;
+        this.canvas.style.width = this.config.w + "px";
+        this.canvas.style.height = this.config.h + "px";
+        this.ctx.scale(dpr, dpr);
+        this.bindEvents();
+        this.render();
+    },
+    getMouse(e) {
+        const r = this.canvas.getBoundingClientRect();
+        return { x: Math.round((e.clientX - r.left)/20)*20, y: Math.round((e.clientY - r.top)/20)*20 };
+    },
+    bindEvents() {
+        document.querySelectorAll('.t-btn[data-tool]').forEach(b => b.onclick = () => {
+            document.querySelectorAll('.t-btn').forEach(x => x.classList.remove('active'));
+            b.classList.add('active'); this.tool = b.dataset.tool;
+        });
+        this.canvas.onmousedown = (e) => {
+            const m = this.getMouse(e); this.isDown = true;
+            if(this.tool === 'select') {
+                const hit = [...this.shapes].reverse().find(s => s.isHit(m.x, m.y));
+                this.shapes.forEach(s => s.selected = false);
+                if(hit) { hit.selected = true; this.sel = hit; this.off = {x:m.x-hit.x, y:m.y-hit.y}; this.showUI(hit); }
+                else { this.sel = null; this.showUI(null); }
+            } else {
+                this.save(); this.active = new Shape(this.tool, m.x, m.y);
+                if(this.tool === 'text') this.active.text = prompt("Tekst:") || "Label";
+                this.shapes.push(this.active);
+            }
+        };
+        window.onmousemove = (e) => {
+            if(!this.isDown) return; const m = this.getMouse(e);
+            if(this.sel && this.tool === 'select') { this.sel.x = m.x-this.off.x; this.sel.y = m.y-this.off.y; }
+            else if(this.active) { this.active.w = m.x-this.active.x; this.active.h = m.y-this.active.y; }
+        };
+        window.onmouseup = () => { this.isDown = false; this.active = null; };
+        window.onkeydown = (e) => { if(e.key === 'Delete') this.deleteSelected(); if(e.ctrlKey && e.key === 'z') this.undo(); };
+    },
+    showUI(s) {
+        document.getElementById('ui-props').style.display = s ? 'block' : 'none';
+        document.getElementById('ui-none').style.display = s ? 'none' : 'block';
+        if(s) {
+            document.getElementById('i-color').value = s.color;
+            document.getElementById('i-w').value = Math.abs(s.w);
+            document.getElementById('i-h').value = Math.abs(s.h);
+            document.getElementById('i-text').value = s.text || "";
+        }
+    },
+    updateObj() {
+        if(!this.sel) return;
+        this.sel.color = document.getElementById('i-color').value;
+        this.sel.w = parseInt(document.getElementById('i-w').value) * (this.sel.w < 0 ? -1 : 1);
+        this.sel.h = parseInt(document.getElementById('i-h').value) * (this.sel.h < 0 ? -1 : 1);
+        this.sel.text = document.getElementById('i-text').value;
+    },
+    quickAdd(t, w, h) { this.save(); const s = new Shape('rect', 100, 100, t); s.w = w; s.h = h; this.shapes.push(s); },
+    save() { this.history.push(JSON.stringify(this.shapes)); },
+    undo() { if(this.history.length) this.shapes = JSON.parse(this.history.pop()).map(s => Object.assign(new Shape(), s)); },
+    clear() { this.shapes = []; },
+    deleteSelected() { this.shapes = this.shapes.filter(s => !s.selected); this.showUI(null); },
+    saveJSON() {
+        const b = new Blob([JSON.stringify(this.shapes)], {type:'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = this.config.name+'.json'; a.click();
+    },
+    exportPNG() {
+        const ec = document.createElement('canvas'); ec.width = this.config.w*4; ec.height = this.config.h*4;
+        const ex = ec.getContext('2d'); ex.fillStyle = "#003366"; ex.fillRect(0,0,ec.width,ec.height);
+        ex.scale(4,4); this.shapes.forEach(s => s.draw(ex, true));
+        const a = document.createElement('a'); a.download = 'EXPORT.png'; a.href = ec.toDataURL(); a.click();
+    },
+    render() {
+        this.ctx.clearRect(0,0,this.config.w,this.config.h);
+        this.ctx.strokeStyle = "rgba(0,0,0,0.05)";
+        for(let x=0; x<this.config.w; x+=20) { this.ctx.beginPath(); this.ctx.moveTo(x,0); this.ctx.lineTo(x,this.config.h); this.ctx.stroke(); }
+        for(let y=0; y<this.config.h; y+=20) { this.ctx.beginPath(); this.ctx.moveTo(0,y); this.ctx.lineTo(this.config.w,y); this.ctx.stroke(); }
+        this.shapes.forEach(s => s.draw(this.ctx));
+        requestAnimationFrame(() => this.render());
+    }
+};
+</script>
+</body>
+</html>
